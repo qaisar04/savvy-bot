@@ -1,0 +1,17 @@
+version: '3'
+services:
+  database:
+    image: postgres:14
+    container_name: tg_database
+    environment:
+      POSTGRES_DB: tg_database
+      POSTGRES_USER: qaisar
+      POSTGRES_PASSWORD: qwerty
+    volumes:
+      - savvy_db:/var/lib/postgresql/data
+    restart: always
+volumes:
+  savvy_db:
+
+
+
