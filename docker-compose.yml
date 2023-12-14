@@ -2,16 +2,32 @@ version: '3'
 services:
   database:
     image: postgres:14
-    container_name: tg_database
+    container_name: savvy_database
     environment:
-      POSTGRES_DB: tg_database
+      POSTGRES_DB: savvy_database
       POSTGRES_USER: qaisar
       POSTGRES_PASSWORD: qwerty
+    ports:
+      - "5433:5432"
     volumes:
       - savvy_db:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready", "-U", "qaisar" ]
     restart: always
+  app:
+    image: qaaaaisar04/savvy-bot:2
+    environment:
+      DB_HOST: database
+      DB_USERNAME: qaisar
+      DB_PASSWORD: qwerty
+      DB_PORT: 5433
+      DB_NAME: savvy_database
+    depends_on:
+      database:
+        condition: service_healthy
 volumes:
   savvy_db:
+
 
 
 

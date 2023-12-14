@@ -2,8 +2,13 @@ package kz.baltabayev.controller;
 
 import kz.baltabayev.api.WeatherOpenApiClient;
 import kz.baltabayev.config.BotConfig;
-import kz.baltabayev.domain.type.BotState;
+import kz.baltabayev.entity.Feedback;
+import kz.baltabayev.entity.type.BotState;
+import kz.baltabayev.repository.FeedbackRepository;
+import kz.baltabayev.service.KinopoiskApiService;
+import kz.baltabayev.util.DateTimeUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -15,16 +20,21 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
-import java.util.*;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
-@Component
 @Slf4j
+@Component
 @RequiredArgsConstructor
 public class TelegramBot extends TelegramLongPollingBot {
 
     private final BotConfig config;
     private final WeatherOpenApiClient weatherClient;
+    private final KinopoiskApiService kinopoiskApiService;
+    private final FeedbackRepository feedback;
 
     private final Map<Long, BotState> botStateMap = new HashMap<>();
     private final Map<Long, Long> userStateMap = new HashMap<>();
@@ -46,28 +56,53 @@ public class TelegramBot extends TelegramLongPollingBot {
             log.info(username + " | " + messageText + " | " + chatId);
 
             Long storedUserId = userStateMap.get(chatId);
-            if (storedUserId != null && storedUserId.equals(userId) && botStateMap.get(chatId) == BotState.WAITING_FOR_CITY) {
-                botStateMap.put(chatId, BotState.WAITING_FOR_MESSAGE);
-                userStateMap.remove(chatId);
-                processWeatherRequest(chatId, messageText);
+            if (storedUserId != null && storedUserId.equals(userId)) {
+                switch (botStateMap.get(chatId)) {
+                    case WAITING_FOR_CITY -> {
+                        botStateMap.put(chatId, BotState.WAITING_FOR_MESSAGE);
+                        userStateMap.remove(chatId);
+                        processWeatherRequest(chatId, messageText);
+                    }
+                    case WAITING_FOR_FEEDBACK -> {
+                        botStateMap.put(chatId, BotState.WAITING_FOR_MESSAGE);
+                        userStateMap.remove(chatId);
+                        Feedback feedbackUser = Feedback.builder()
+                                .username(username)
+                                .createdAt(DateTimeUtils.parseDateTime(LocalDateTime.now()))
+                                .description(messageText)
+                                .build();
+                        feedback.save(feedbackUser);
+                        sendAnswerMessage(chatId, "Спасибо за ваше участие и помощь в оценке нашей работы. Желаем вам отличного настроения и приятного пользования нашими услугами!");
+
+                    }
+                }
             } else {
                 switch (messageText) {
-                    case "/start":
+                    case "/start" -> {
                         startCommandReceived(chatId, update.getMessage().getChat().getFirstName());
-                        break;
-                    case "/coinflip":
+                    }
+                    case "/coinflip" -> {
                         coinFlipCommandReceived(chatId);
-                        break;
-                    case "/help":
+                    }
+                    case "/help" -> {
                         showHelpCommandReceived(chatId);
-                        break;
-                    case "/weather":
+                    }
+                    case "/weather" -> {
                         sendAnswerMessage(chatId, "Введите локацию, для которого вы хотите узнать погоду:");
                         botStateMap.put(chatId, BotState.WAITING_FOR_CITY);
                         userStateMap.put(chatId, userId);
-                        break;
-                    default:
+                    }
+                    case "/kino" -> {
+                        sendAnswerMessage(chatId, "Данная команда на обработке.");
+                    }
+                    case "/feedback" -> {
+                        sendAnswerMessage(chatId, "Пожалуйста, поделитесь своим мнением:");
+                        botStateMap.put(chatId, BotState.WAITING_FOR_FEEDBACK);
+                        userStateMap.put(chatId, userId);
+                    }
+                    default -> {
                         sendAnswerMessage(chatId, "К сожалению я не знаю такой команды, данный запрос я сохранил в базу данных!");
+                    }
                 }
             }
         }
@@ -83,6 +118,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         return config.getBotToken();
     }
 
+    @SneakyThrows
     private void processWeatherRequest(long chatId, String city) {
         String weatherText = weatherClient.getWeather(city);
 

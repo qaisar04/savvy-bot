@@ -1,10 +1,10 @@
 package kz.baltabayev.api;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.baltabayev.translations.WeatherTranslator;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -14,55 +14,41 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 @Component
-@PropertySource("classpath:application.properties")
 public class WeatherOpenApiClient {
 
-    @Value("${api.weather}")
+    @Value("${bot.weather_token}")
     private String API_KEY;
 
-    public static String getUrlContent(String urlAddress) {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(urlAddress))
-                .build();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-        HttpResponse<String> response;
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            return response.body();
-        } catch (IOException | InterruptedException e) {
-            return "Ошибка при выполнении вашего запроса. Пожалуйста, попробуйте позже.";
-        }
-    }
 
-    public String getWeather(String city) {
-        String output = getUrlContent(
+    public String getWeather(String city) throws JsonProcessingException {
+        String output = ApiClient.getUrlContent(
                 "https://api.openweathermap.org/data/2.5/weather?q="
                 + city
                 + "&appid=" + API_KEY + "&units=metric"
         );
+
+        JsonNode jsonNode = objectMapper.readTree(output);
         String weatherText = "Произошла ошибка. Повторите попытку чуть позже!";
 
         if (!output.isEmpty()) {
-            JSONObject object = new JSONObject(output);
-
             // Main
-            JSONObject main = object.getJSONObject("main");
-            int temperature = main.getInt("temp");
-            int feelsLike = main.getInt("feels_like");
-            double pressure = main.getDouble("pressure");
-            double humidity = main.getDouble("humidity");
+            JsonNode main = jsonNode.get("main");
+            int temperature = main.get("temp").asInt();
+            int feelsLike = main.get("feels_like").asInt();
+            double pressure = main.get("pressure").asDouble();
+            double humidity = main.get("humidity").asDouble();
 
             // Weather
-            JSONArray weatherArray = object.getJSONArray("weather");
-            JSONObject firstWeatherObject = weatherArray.getJSONObject(0);
-            String weatherMain = firstWeatherObject.getString("main");
+            JsonNode weather = jsonNode.get("weather");
+            String weatherMain = weather.get("main").asText();
 
             String weatherMainTranslated = WeatherTranslator.translateWeatherMain(weatherMain);
 
             // Wind
-            JSONObject wind = object.optJSONObject("wind");
-            double windSpeed = wind.getDouble("speed");
+            JsonNode wind = jsonNode.get("wind");
+            double windSpeed = wind.get("speed").asDouble();
 
             if (temperature <= 0) {
                 weatherText = "❄️☃️ Холодная погода в регионе " + city + " :\n" +
