@@ -16,8 +16,8 @@ services:
     restart: always
   app:
     image: qaaaaisar04/savvy-bot:2.1
-    env_file:
-      - ./env_file.env
+#    env_file:
+#      - ./env_file.env
     environment:
       DB_HOST: database
       DB_USERNAME: qaisar
