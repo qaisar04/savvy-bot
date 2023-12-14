@@ -3,8 +3,10 @@ package kz.baltabayev.controller;
 import kz.baltabayev.api.WeatherOpenApiClient;
 import kz.baltabayev.config.BotConfig;
 import kz.baltabayev.entity.Feedback;
+import kz.baltabayev.entity.Security;
 import kz.baltabayev.entity.type.BotState;
 import kz.baltabayev.repository.FeedbackRepository;
+import kz.baltabayev.repository.SecurityRepository;
 import kz.baltabayev.service.KinopoiskApiService;
 import kz.baltabayev.util.DateTimeUtils;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +23,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
@@ -35,6 +34,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final BotConfig config;
     private final WeatherOpenApiClient weatherClient;
     private final FeedbackRepository feedback;
+    private final SecurityRepository security;
 
     private final Map<Long, BotState> botStateMap = new HashMap<>();
     private final Map<Long, Long> userStateMap = new HashMap<>();
@@ -54,9 +54,9 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             String username = Optional.ofNullable(update.getMessage().getChat().getUserName())
                     .orElse(update.getMessage().getChat().getFirstName());
-            log.info(username + " | " + messageText + " | " + chatId);
+            log.info("{} | {} | {}", username, messageText, chatId);
 
-            if (storedUserId != null && storedUserId.equals(userId)) {
+            if (storedUserId != null && storedUserId.equals(userId) && !messageText.equals("/exit")) {
                 switch (botStateMap.get(chatId)) {
                     case WAITING_FOR_CITY -> {
                         botStateMap.put(chatId, BotState.WAITING_FOR_MESSAGE);
@@ -76,13 +76,16 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                     }
                     case WAITING_FOR_ADMIN -> {
-                        if(messageText.equals("admin test")) {
+                        Optional<Security> securityOptional = security.findByUuidCode(messageText);
+
+                        if (securityOptional.isPresent()) {
                             botStateMap.put(chatId, BotState.WAITING_FOR_MESSAGE);
                             userStateMap.remove(chatId);
                             List<Feedback> feedbackList = feedback.findAll();
                             sendAnswerMessage(chatId, formatFeedbackList(feedbackList));
+                            security.delete(securityOptional.get());
                         } else {
-                            sendAnswerMessage(chatId, "Извините, введен неверный логин или пароль. Пожалуйста, проверьте ваши данные и повторите попытку.");
+                            sendAnswerMessage(chatId, "Введен неверный код. Пожалуйста, проверьте ваши данные и повторите попытку. Команда для выхода /exit");
                         }
                     }
                 }
@@ -91,6 +94,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                     case "/start" -> {
                         startCommandReceived(chatId, update.getMessage().getChat().getFirstName());
                     }
+                    case "/exit" -> {
+                        botStateMap.put(chatId, BotState.WAITING_FOR_MESSAGE);
+                        userStateMap.remove(chatId);
+                        sendAnswerMessage(chatId, "Вы успешно вышли из текущего режима.");
+                    }
                     case "/coinflip" -> {
                         coinFlipCommandReceived(chatId);
                     }
@@ -98,7 +106,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                         showHelpCommandReceived(chatId);
                     }
                     case "/weather" -> {
-                        sendAnswerMessage(chatId, "Введите локацию, для которого вы хотите узнать погоду:");
+                        sendAnswerMessage(chatId, "Введите локацию, для которого вы хотите узнать погоду. Команда для выхода /exit");
                         botStateMap.put(chatId, BotState.WAITING_FOR_CITY);
                         userStateMap.put(chatId, userId);
                     }
@@ -106,12 +114,17 @@ public class TelegramBot extends TelegramLongPollingBot {
                         sendAnswerMessage(chatId, "Данная команда на обработке.");
                     }
                     case "/feedback" -> {
-                        sendAnswerMessage(chatId, "Пожалуйста, поделитесь своим мнением:");
-                        botStateMap.put(chatId, BotState.WAITING_FOR_FEEDBACK);
-                        userStateMap.put(chatId, userId);
+                        if (chatId > 0) {
+                            sendAnswerMessage(chatId, "Пожалуйста, поделитесь своим мнением. Команда для выхода /exit");
+                            botStateMap.put(chatId, BotState.WAITING_FOR_FEEDBACK);
+                            userStateMap.put(chatId, userId);
+                        } else {
+                            sendAnswerMessage(chatId, "Пожалуйста, применяйте указанную команду в личных сообщениях.");
+                        }
                     }
                     case "/admin" -> {
-                        sendAnswerMessage(chatId, "Пожалуйста, введите логин и пароль:");
+                        sendConfirmationCode();
+                        sendAnswerMessage(chatId, "Для завершения процесса, введите код подтверждения, отправленный на аккаунт владельца. Команда для выхода /exit");
                         botStateMap.put(chatId, BotState.WAITING_FOR_ADMIN);
                         userStateMap.put(chatId, userId);
                     }
@@ -149,10 +162,11 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void showHelpCommandReceived(long chatId) {
         String helpMessage = "Список доступных команд:\n" +
-                             "/coinflip - Подбросить монетку\n" +
-                             "/help - Показать список доступных команд\n" +
-                             "/weather - Узнать информацию о погоде\n\n" +
-                             "Группа в телеграмме: @prgrm_java";
+                             "/coinflip - подбросить монетку\n" +
+                             "/weather - узнать информацию о погоде\n" +
+                             "/help - показать список доступных команд\n" +
+                             "/feedback - оставить обратную связь о боте\n\n" +
+                             "группа в телеграмме: @prgrm_java";
 
         sendAnswerMessage(chatId, helpMessage);
     }
@@ -161,7 +175,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         String[] coinSides = {"орёл 🦅", "решка 💰"};
         int randomIndex = ThreadLocalRandom.current().nextInt(coinSides.length);
         String result = coinSides[randomIndex];
-
 
         String answer = String.format("Монетка была подброшена... и она выпала на: %s", result);
         sendAnswerMessage(chatId, answer);
@@ -185,6 +198,21 @@ public class TelegramBot extends TelegramLongPollingBot {
             log.error("Error occured: " + e.getMessage());
         }
     }
+
+    private void sendConfirmationCode() {
+        String uuidCode = generateUUID();
+        Security build = Security.builder()
+                .uuidCode(uuidCode)
+                .build();
+        sendAnswerMessage(697119914, uuidCode);
+        security.save(build);
+    }
+
+    public static String generateUUID() {
+        UUID uuid = UUID.randomUUID();
+        return uuid.toString();
+    }
+
 
     private String formatFeedbackList(List<Feedback> feedbackList) {
         StringBuilder formattedList = new StringBuilder();
