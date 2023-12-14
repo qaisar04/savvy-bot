@@ -22,7 +22,7 @@ services:
       DB_HOST: database
       DB_USERNAME: qaisar
       DB_PASSWORD: qwerty
-      DB_PORT: 5433
+      DB_PORT: 5432
       DB_NAME: savvy_database
     depends_on:
       database:
