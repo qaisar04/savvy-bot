@@ -14,7 +14,7 @@ services:
       test: [ "CMD-SHELL", "pg_isready", "-U", "qaisar" ]
     restart: always
   app:
-    image: qaaaaisar04/savvy-bot:1-final
+    image: qaaaaisar04/savvy-bot:1-final-amd
     environment:
       DB_HOST: database
       DB_USERNAME: qaisar
