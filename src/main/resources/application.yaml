@@ -14,4 +14,3 @@ bot:
   token: ${BOT_API_TOKEN}
   weather_token: ${WEATHER_API_TOKEN}
   kinopoisk_token: ${KINOPOISK_API_TOKEN}
-

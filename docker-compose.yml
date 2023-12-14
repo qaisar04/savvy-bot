@@ -2,7 +2,6 @@ version: '3'
 services:
   database:
     image: postgres:14
-    container_name: savvy_database
     environment:
       POSTGRES_DB: savvy_database
       POSTGRES_USER: qaisar
@@ -15,15 +14,16 @@ services:
       test: [ "CMD-SHELL", "pg_isready", "-U", "qaisar" ]
     restart: always
   app:
-    image: qaaaaisar04/savvy-bot:3
-#    env_file:
-#      - ./env_file.env
+    image: qaaaaisar04/savvy-bot:1-final
     environment:
       DB_HOST: database
       DB_USERNAME: qaisar
       DB_PASSWORD: qwerty
       DB_PORT: 5432
       DB_NAME: savvy_database
+      BOT_API_TOKEN: 6218697372:AAFcYcm056ks9ANJCVzWzZSbTDLeJTwzSBE
+      KINOPOISK_API_TOKEN: Y1WJHTB-9HJM14J-P3CRDXY-MBJXVR1
+      WEATHER_API_TOKEN: b4275b94df9254b341720df6c6a58f10
     depends_on:
       database:
         condition: service_healthy
