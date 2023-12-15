@@ -3,6 +3,7 @@ package kz.baltabayev.service;
 import kz.baltabayev.controller.TelegramBot;
 import kz.baltabayev.entity.Security;
 import kz.baltabayev.repository.SecurityRepository;
+import kz.baltabayev.util.DateTimeUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Lazy;
@@ -21,7 +22,7 @@ public class SecurityService {
     public void sendConfirmationCode(TelegramBot bot) {
         String uuidCode = generateUUID();
         Security build = Security.builder()
-                .createdAt(LocalDateTime.now())
+                .createdAt(DateTimeUtils.parseDateTime(LocalDateTime.now()))
                 .uuidCode(uuidCode)
                 .build();
         bot.sendAnswerMessage(697119914, uuidCode);

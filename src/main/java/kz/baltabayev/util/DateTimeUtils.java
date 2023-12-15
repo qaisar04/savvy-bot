@@ -24,4 +24,16 @@ public class DateTimeUtils {
         return dateTime.format(dateTimeFormatter);
     }
 
+    public LocalDateTime parseDateFromString(String dateString) {
+        return LocalDateTime.parse(dateString, dateFormatter);
+    }
+
+    public LocalDateTime parseTimeFromString(String timeString) {
+        return LocalDateTime.parse(timeString, timeFormatter);
+    }
+
+    public LocalDateTime parseDateTimeFromString(String dateTimeString) {
+        return LocalDateTime.parse(dateTimeString, dateTimeFormatter);
+    }
+
 }

@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "feedback")
+@Table(name = "feedback", schema = "dev")
 public class Feedback {
 
     @Id
@@ -24,6 +24,7 @@ public class Feedback {
 
     private String username;
 
+    @Column(name = "created_at")
     private String createdAt;
 
     private String description;

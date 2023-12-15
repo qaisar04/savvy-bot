@@ -122,15 +122,16 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void handleAdminInput(String messageText, User user) {
         Optional<Security> securityOptional = security.findByUuidCode(messageText);
         if (securityOptional.isPresent()) {
-            LocalDateTime createdAt = securityOptional.get().getCreatedAt();
-            LocalDateTime fiveMinutesAgo = LocalDateTime.now().minusMinutes(5);
+            LocalDateTime createdAt = DateTimeUtils.parseDateTimeFromString(securityOptional.get().getCreatedAt());
+            LocalDateTime oneMinutesAgo = LocalDateTime.now().minusMinutes(1);
 
-            if (createdAt.isBefore(fiveMinutesAgo)) {
+            if (createdAt.isBefore(oneMinutesAgo)) {
                 security.delete(securityOptional.get());
                 sendAnswerMessage(user.getChatId(), "Время действия кода истекло. Пожалуйста, запросите новый код.");
             } else {
                 user.setBotState(BotState.WAITING_FOR_MESSAGE);
                 userService.save(user);
+                security.delete(securityOptional.get());
                 List<Feedback> feedbackList = feedback.findAll();
                 sendAnswerMessage(user.getChatId(), FeedbackFormatterUtils.formatFeedbackList(feedbackList));
             }
@@ -180,7 +181,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void handleAdminCommand(long chatId, User user) {
         if (security.isPrivateChat(chatId, this)) {
             security.sendConfirmationCode(this);
-            sendAnswerMessage(chatId, "Для завершения процесса, введите код подтверждения, отправленный на аккаунт владельца. Команда для выхода /exit");
+            sendAnswerMessage(chatId, "Для завершения процесса, введите код подтверждения, отправленный на аккаунт владельца. Обратите внимание, что токен активен в течение 60 секунд. После истечения этого времени токен будет автоматически удален. Вернуться в главное меню можно с помощью команды /exit.");
             user.setBotState(BotState.WAITING_FOR_ADMIN);
             userService.save(user);
         }

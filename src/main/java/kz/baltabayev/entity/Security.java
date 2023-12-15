@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
+@Table(name = "security", schema = "dev")
 public class Security {
 
     @Id
@@ -22,6 +23,6 @@ public class Security {
     private String uuidCode;
 
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private String createdAt;
 
 }

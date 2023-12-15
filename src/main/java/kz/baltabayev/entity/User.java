@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "user_state")
+@Table(name = "users", schema = "dev")
 public class User {
 
     @Id
@@ -28,7 +28,7 @@ public class User {
     private Long userId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "bot_state")
+    @Column(name = "bot_state", columnDefinition = "VARCHAR(128) default 'WAITING_FOR_MESSAGE'")
     private BotState botState;
 
 }
