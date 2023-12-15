@@ -1,13 +1,12 @@
 package kz.baltabayev.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Data
@@ -21,5 +20,8 @@ public class Security {
     private Long id;
 
     private String uuidCode;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
 
 }

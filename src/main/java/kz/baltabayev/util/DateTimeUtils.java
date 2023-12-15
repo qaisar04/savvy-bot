@@ -12,7 +12,6 @@ public class DateTimeUtils {
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd");
     private final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
 
-
     public String parseDate(LocalDateTime dateTime) {
         return dateTime.format(dateFormatter);
     }
