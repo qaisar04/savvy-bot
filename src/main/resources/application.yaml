@@ -4,6 +4,11 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: qaisar
+    password: p@ssw0rd
   liquibase:
     change-log: db.changelog/changelog.xml
     enabled: true
@@ -16,4 +21,3 @@ bot:
   name: SavvyBot
   token: ${BOT_API_TOKEN}
   weather_token: ${WEATHER_API_TOKEN}
-  kinopoisk_token: ${KINOPOISK_API_TOKEN}

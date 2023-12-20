@@ -1,6 +1,7 @@
 version: '3'
 services:
   database:
+    container_name: database
     image: postgres:14
     environment:
       POSTGRES_DB: savvy_database
@@ -13,7 +14,10 @@ services:
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready", "-U", "qaisar" ]
     restart: always
+
+
   app:
+    container_name: app
     image: qaaaaisar04/savvy-bot:1-final
     environment:
       DB_HOST: database
@@ -27,6 +31,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+
+
 volumes:
   savvy_db:
 
