@@ -4,11 +4,6 @@ spring:
     username: ${DB_USERNAME:qaisar}
     password: ${DB_PASSWORD:qwerty}
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:savvy_database}
-#  rabbitmq:
-#    host: localhost
-#    port: 5672
-#    username: qaisar
-#    password: qwerty
   main:
     allow-circular-references: true
   liquibase:
