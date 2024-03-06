@@ -35,5 +35,4 @@ public class DateTimeUtils {
     public LocalDateTime parseDateTimeFromString(String dateTimeString) {
         return LocalDateTime.parse(dateTimeString, dateTimeFormatter);
     }
-
 }

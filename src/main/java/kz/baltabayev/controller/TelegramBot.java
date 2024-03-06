@@ -2,19 +2,24 @@ package kz.baltabayev.controller;
 
 import jakarta.annotation.PostConstruct;
 import kz.baltabayev.entity.Feedback;
+import kz.baltabayev.entity.MessageText;
 import kz.baltabayev.entity.Security;
 import kz.baltabayev.entity.User;
 import kz.baltabayev.entity.type.BotState;
+import kz.baltabayev.entity.type.MessageState;
 import kz.baltabayev.service.*;
 import kz.baltabayev.util.DateTimeUtils;
 import kz.baltabayev.util.FeedbackFormatterUtils;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -22,11 +27,14 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class TelegramBot extends TelegramLongPollingBot {
 
     private final SecurityService security;
@@ -34,12 +42,30 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final WeatherApiService weather;
     private final FeedbackService feedback;
     private final UserService userService;
+    private final String botName;
+    private final ScheduledExecutorService scheduler;
 
-    @Value("${bot.name}")
-    private String botName;
+    @Autowired
+    public TelegramBot(SecurityService security, TelegramCommandService command, WeatherApiService weather, FeedbackService feedback, UserService userService, @Value("${bot.name}") String botName, @Value("${bot.token}") String botToken, @Lazy ScheduledExecutorService scheduler) {
+        super(botToken);
+        this.security = security;
+        this.command = command;
+        this.weather = weather;
+        this.feedback = feedback;
+        this.userService = userService;
+        this.botName = botName;
+        this.scheduler = scheduler;
+    }
 
-    @Value("${bot.token}")
-    private String botToken;
+    @Bean
+    public ScheduledExecutorService scheduledExecutorService() {
+        return Executors.newScheduledThreadPool(5);
+    }
+
+    @Override
+    public String getBotUsername() {
+        return botName;
+    }
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -49,53 +75,31 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void handleMessage(Message message) {
-        String messageText = message.getText().replace("@SavvyTelegramBot", "");
-        long chatId = message.getChatId(); // идендификатор чата
-        long userId = message.getFrom().getId(); // идендификатор пользователя, который отправил сообщение
-
-        String chatName = Optional.ofNullable(message.getChat().getUserName())
-                .orElse(message.getChat().getFirstName());
+        MessageText messageText = checkMessage(message);
 
         String username = Optional.ofNullable(message.getFrom().getUserName())
                 .orElse(message.getFrom().getFirstName());
 
-        User user = userService.getUserByUserIdAndChatId(userId, chatId)
+        User user = userService.getUserByUserIdAndChatId(messageText.getUserId(), messageText.getChatId())
                 .orElse(User.builder()
                         .username(username)
-                        .chatId(chatId)
-                        .userId(userId)
+                        .chatId(messageText.getChatId())
+                        .userId(messageText.getUserId())
                         .botState(BotState.WAITING_FOR_MESSAGE)
                         .build());
-
         userService.save(user);
 
-        log.info("from: {} | chat: {} | chatId: {} | userId: {} | {}", username, chatName, chatId, userId, messageText);
-
-        if (messageText.equals("/exit")) {
+        if (messageText.getMessageText().equals("/exit")) {
             handleExitCommand(user);
         } else if (user.getBotState().equals(BotState.WAITING_FOR_MESSAGE) && user.getUserId() != null
-                   && user.getUserId().equals(userId)) {
+                   && user.getUserId().equals(messageText.getUserId())) {
             handleCommand(messageText, user);
         } else {
             handleUserInput(messageText, user);
         }
     }
 
-    @PostConstruct
-    public void init() {
-        List<Long> uniqueChatId = userService.getUniqueChatId();
-        List<Long> uniqueUserId = userService.getUniqueUserId();
-
-        Set<Long> uniqueIds = new HashSet<>();
-        uniqueIds.addAll(uniqueChatId);
-        uniqueIds.addAll(uniqueUserId);
-
-        for (Long chatId : uniqueIds) {
-            sendAnswerMessage(chatId, "Был технический перерыв, но теперь я в строю и работаю еще лучше!");
-        }
-    }
-
-    private void handleUserInput(String messageText, User user) {
+    private void handleUserInput(MessageText messageText, User user) {
         BotState currentState = user.getBotState();
 
         if (currentState == null) {
@@ -104,8 +108,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         } else {
             switch (currentState) {
                 case WAITING_FOR_CITY -> handleCityInput(messageText, user);
-                case WAITING_FOR_FEEDBACK -> handleFeedbackInput(messageText, user);
-                case WAITING_FOR_ADMIN -> handleAdminInput(messageText, user);
+                case WAITING_FOR_FEEDBACK -> handleFeedbackInput(messageText.getMessageText(), user);
+                case WAITING_FOR_ADMIN -> handleAdminInput(messageText.getMessageText(), user);
                 default -> {
                     sendAnswerMessage(user.getChatId(), "Неожиданное состояние бота. Команда для выхода /exit");
                 }
@@ -113,14 +117,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void handleCityInput(String messageText, User user) {
+    private void handleCityInput(MessageText messageText, User user) {
         weather.processWeatherRequest(user.getChatId(), messageText, this);
         user.setBotState(BotState.WAITING_FOR_MESSAGE);
         userService.save(user);
     }
 
     private void handleFeedbackInput(String messageText, User user) {
-                Feedback feedbackUser = Feedback.builder()
+        Feedback feedbackUser = Feedback.builder()
                 .username(user.getUsername())
                 .createdAt(DateTimeUtils.parseDateTime(LocalDateTime.now()))
                 .description(messageText)
@@ -152,8 +156,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void handleCommand(String messageText, User user) {
-        switch (messageText) {
+    private void handleCommand(MessageText messageText, User user) {
+        switch (messageText.getMessageText()) {
             case "/start" -> {
                 command.startCommandReceived(user.getChatId(), user.getUsername(), this);
                 user.setBotState(BotState.WAITING_FOR_MESSAGE);
@@ -162,7 +166,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             case "/exit" -> handleExitCommand(user);
             case "/coinflip" -> command.coinFlipCommandReceived(user.getChatId(), this);
             case "/help" -> command.showHelpCommandReceived(user.getChatId(), this);
-            case "/weather" -> handleWeatherCommand(user.getChatId(), user);
+            case "/weather" -> handleWeatherCommand(user.getChatId(), user, messageText);
             case "/feedback" -> handleFeedbackCommand(user.getChatId(), user);
             case "/admin" -> handleAdminCommand(user.getChatId(), user);
             default -> handleUnknownCommand(user.getChatId());
@@ -172,15 +176,17 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void handleExitCommand(User user) {
         if (user.getBotState().equals(BotState.WAITING_FOR_MESSAGE)) {
             sendAnswerMessage(user.getChatId(), "Вы уже находитесь в режиме ожидания.");
+        } else {
+            user.setBotState(BotState.WAITING_FOR_MESSAGE);
+            userService.save(user);
+            sendAnswerMessage(user.getChatId(), "Вы успешно вышли из текущего режима.");
         }
-        user.setBotState(BotState.WAITING_FOR_MESSAGE);
-        userService.save(user);
-        sendAnswerMessage(user.getChatId(), "Вы успешно вышли из текущего режима.");
     }
 
-    private void handleWeatherCommand(long chatId, User user) {
-        if(user.getUserId() != null && user.getChatId() != null && user.getChatId().equals(chatId)) {
-            sendAnswerMessage(chatId, "Введите локацию, для которого вы хотите узнать погоду. Команда для выхода /exit");
+    private void handleWeatherCommand(long chatId, User user, MessageText messageText) {
+        if (user.getUserId() != null && user.getChatId() != null && user.getChatId().equals(chatId)) {
+            sendAnswerMessage(chatId, "Введите локацию, для которого вы хотите узнать погоду. Команда для выхода /exit", 30);
+            messageText.setMessageState(MessageState.WEATHER);
             user.setBotState(BotState.WAITING_FOR_CITY);
             userService.save(user);
         }
@@ -221,28 +227,74 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    public void sendPhotoMessage(long chatId, String photoPath) {
-        SendPhoto sendPhoto = new SendPhoto();
-        sendPhoto.setChatId(String.valueOf(chatId));
-
-        InputFile photo = new InputFile(new File(photoPath));
-        sendPhoto.setPhoto(photo);
+    public void sendAnswerMessage(long chatId, String textToSend, boolean useMarkdown) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId);
+        message.setText(textToSend);
+        message.enableMarkdown(useMarkdown);
 
         try {
-            execute(sendPhoto);
+            execute(message);
         } catch (TelegramApiException e) {
             log.error("Error occured: " + e.getMessage());
         }
     }
 
-    @Override
-    public String getBotUsername() {
-        return botName;
+    public void sendAnswerMessage(long chatId, String textToSend, int delayInSeconds) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId);
+        message.setText(textToSend);
+
+        try {
+            Message sentMessage = execute(message);
+
+            if (sentMessage != null) {
+                scheduler.schedule(() -> deleteMessage(chatId, sentMessage.getMessageId()), delayInSeconds, TimeUnit.SECONDS);
+            }
+        } catch (TelegramApiException e) {
+            log.error("Error occurred: " + e.getMessage());
+        }
     }
 
-    @Override
-    public String getBotToken() {
-        return botToken;
+    private void deleteMessage(long chatId, Integer messageId) {
+        try {
+            if (!isPrivateChat(chatId)) {
+                execute(new DeleteMessage(String.valueOf(chatId), messageId));
+            }
+        } catch (TelegramApiException e) {
+            log.error("Error occurred while deleting message: " + e.getMessage());
+        }
     }
 
+    public void deleteMessageWithTimer(long chatId, Integer messageId, int delayInSeconds) {
+        if (!isPrivateChat(chatId)) {
+            scheduler.schedule(() -> deleteMessage(chatId, messageId), delayInSeconds, TimeUnit.SECONDS);
+        }
+    }
+
+    public MessageText checkMessage(Message messageText) {
+        MessageText message = MessageText.builder()
+                .chatId(messageText.getChatId())
+                .userId(messageText.getFrom().getId())
+                .messageId(messageText.getMessageId())
+                .messageText(messageText.getText().replace("@SavvyTelegramBot", ""))
+                .build();
+
+        if (message.getMessageText().equals("/weather")) {
+            message.setMessageState(MessageState.WEATHER);
+        } else if (security.isPrivateChat(messageText.getChatId())) {
+            message.setMessageState(MessageState.PRIVATE);
+        } else {
+            message.setMessageState(MessageState.DEFAULT);
+        }
+
+        if (message.getMessageState().equals(MessageState.WEATHER)) {
+            deleteMessageWithTimer(message.getChatId(), message.getMessageId(), 30);
+        }
+        return message;
+    }
+
+    public boolean isPrivateChat(long chatId) {
+        return chatId >= 0;
+    }
 }

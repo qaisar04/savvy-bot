@@ -4,7 +4,11 @@ import kz.baltabayev.controller.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.io.File;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
@@ -39,7 +43,17 @@ public class TelegramCommandService {
         bot.sendAnswerMessage(chatId, answer);
     }
 
+    public void sendPhotoMessage(long chatId, String photoPath, TelegramBot bot) {
+        SendPhoto sendPhoto = new SendPhoto();
+        sendPhoto.setChatId(String.valueOf(chatId));
 
+        InputFile photo = new InputFile(new File(photoPath));
+        sendPhoto.setPhoto(photo);
 
-
+        try {
+            bot.execute(sendPhoto);
+        } catch (TelegramApiException e) {
+            log.error("Error occured: " + e.getMessage());
+        }
+    }
 }

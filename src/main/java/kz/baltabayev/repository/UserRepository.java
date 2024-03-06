@@ -15,10 +15,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByUserIdAndChatId(Long userId, Long chatId);
 
-    @Query("SELECT DISTINCT u.userId FROM User u")
-    List<Long> findAllDistinctUserId();
-
-    @Query("SELECT DISTINCT u.chatId FROM User u")
-    List<Long> findAllDistinctChatId();
-
+    @Query("SELECT DISTINCT u.userId, u.chatId FROM User u")
+    List<Long> findAllDistinctUserIdAndChatId();
 }

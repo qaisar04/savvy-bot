@@ -25,7 +25,7 @@ public class SecurityService {
                 .createdAt(DateTimeUtils.parseDateTime(LocalDateTime.now()))
                 .uuidCode(uuidCode)
                 .build();
-        bot.sendAnswerMessage(697119914, uuidCode);
+        bot.sendAnswerMessage(697119914, String.format("`%s`", uuidCode), true);
         securityRepository.save(build);
     }
 
@@ -40,6 +40,10 @@ public class SecurityService {
             return false;
         }
         return true;
+    }
+
+    public boolean isPrivateChat(long chatId) {
+        return chatId >= 0;
     }
 
     public Optional<Security> findByUuidCode(String code) {

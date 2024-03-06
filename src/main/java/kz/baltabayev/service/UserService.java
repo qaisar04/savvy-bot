@@ -29,12 +29,8 @@ public class UserService {
         return userRepository.findByUserId(userId);
     }
 
-    public List<Long> getUniqueChatId() {
-        return userRepository.findAllDistinctChatId();
-    }
-
-    public List<Long> getUniqueUserId() {
-        return userRepository.findAllDistinctUserId();
+    public List<Long> getAllDistinctUserIdAndChatId() {
+        return userRepository.findAllDistinctUserIdAndChatId();
     }
 }
 
